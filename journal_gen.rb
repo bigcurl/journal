@@ -104,14 +104,18 @@ class JournalGen < Clamp::Command
   option ['--dry-run'], :flag, 'Print planned dates, do not write'
   option ['--list-sets'], :flag, 'List available sets and exit'
 
-  option ['--format'], 'FORMAT', 'Output format: md or pdf (default: md)', default: 'md'
-  option ['--delete-md'], :flag, 'When --format pdf is used, delete the intermediate .md file (default: keep)'
+  option ['--export', '--format'], 'FORMAT', 'Output format: md or pdf (default: md)', default: 'md', attribute_name: :format
+  option ['--delete-md'], :flag, 'When --export pdf is used, delete the intermediate .md file (default: keep)'
   option ['--pandoc'], 'PATH', 'Path to pandoc executable (default: search PATH)'
 
   def execute
     tdir = template_dir || File.join(__dir__, 'templates')
     config_path = File.join(__dir__, 'config.yml')
     cfg = load_config(config_path)
+
+    if format.downcase == 'pdf' && (self.file.nil? || self.file.strip.empty?)
+      abort 'Error: --file is required when using --export pdf'
+    end
 
     if list_sets?
       puts "Available sets in #{tdir}:"
