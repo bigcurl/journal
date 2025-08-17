@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'minitest/autorun'
 require_relative '../journal_gen'
 
@@ -24,7 +26,8 @@ class JournalGenOptionsTest < Minitest::Test
   end
 
   def test_flags
-    cmd = new_command('--skip-weekly', '--skip-monthly', '--start-next-monday', '--dry-run', '--list-sets', '--delete-md')
+    cmd = new_command('--skip-weekly', '--skip-monthly', '--start-next-monday', '--dry-run', '--list-sets',
+                      '--delete-md')
     assert cmd.skip_weekly?
     assert cmd.skip_monthly?
     assert cmd.start_next_monday?
@@ -34,7 +37,8 @@ class JournalGenOptionsTest < Minitest::Test
   end
 
   def test_string_options
-    cmd = new_command('--file', 'my.md', '--output-dir', 'out', '--template-dir', 'templates', '--set', 'work', '--format', 'pdf', '--pandoc', '/usr/bin/pandoc')
+    cmd = new_command('--file', 'my.md', '--output-dir', 'out', '--template-dir', 'templates', '--set', 'work',
+                      '--format', 'pdf', '--pandoc', '/usr/bin/pandoc')
     assert_equal 'my.md', cmd.file
     assert_equal 'out', cmd.output_dir
     assert_equal 'templates', cmd.template_dir
