@@ -56,8 +56,8 @@ ruby journal_gen.rb
     --start-next-monday   Start generation on the next Monday (instead of the day after last entry)
     --dry-run             Print planned dates, do not write
     --list-sets           List available sets and exit
-    --format FORMAT       Output format: md or pdf (default: md)
-    --delete-md           Delete the intermediate .md when --format pdf (default: keep)
+    --export FORMAT       Output format: md or pdf (default: md; requires --file for pdf)
+    --delete-md           Delete the intermediate .md when --export pdf (default: keep)
     --pandoc PATH         Path to pandoc executable (defaults to first found in PATH)
 -h, --help                Print help
 ```
@@ -80,13 +80,13 @@ ruby journal_gen.rb --set family --output-dir ~/Documents/Journals
 ruby journal_gen.rb --weeks 8 --start-next-monday --skip-monthly
 
 # Export to PDF (requires pandoc), keep the markdown (default)
-ruby journal_gen.rb --format pdf
+ruby journal_gen.rb --file journal.md --export pdf
 
 # Export to PDF and delete the markdown
-ruby journal_gen.rb --format pdf --delete-md
+ruby journal_gen.rb --file journal.md --export pdf --delete-md
 
 # Use a specific pandoc path
-ruby journal_gen.rb --format pdf --pandoc /usr/local/bin/pandoc
+ruby journal_gen.rb --file journal.md --export pdf --pandoc /usr/local/bin/pandoc
 
 # Just see what would be generated
 ruby journal_gen.rb --dry-run
