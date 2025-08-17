@@ -218,4 +218,4 @@ class JournalGen < Clamp::Command
   end
 end
 
-JournalGen.run
+JournalGen.run if $PROGRAM_NAME == __FILE__
