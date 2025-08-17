@@ -1,2 +1,182 @@
 #!/usr/bin/env ruby
-# This is the CLI script (omitted for brevity in this zip demo)
+# frozen_string_literal: true
+# encoding: UTF-8
+
+require 'date'
+require 'erb'
+require 'yaml'
+require 'clamp'
+require 'fileutils'
+
+WEEKDAY = %w[Sunday Monday Tuesday Wednesday Thursday Friday Saturday].freeze
+
+def to_date(obj)
+  return obj if obj.is_a?(Date)
+  return Date.parse(obj) if obj.is_a?(String)
+  Date.parse(obj.to_s)
+rescue ArgumentError
+  raise ArgumentError, "Could not coerce #{obj.inspect} to Date"
+end
+
+def render_template(path, locals = {})
+  erb = ERB.new(File.read(path), trim_mode: '-')
+  context = Object.new
+  locals.each { |k, v| context.instance_variable_set(:"@#{k}", v) }
+  context.define_singleton_method(:get_binding) { binding }
+  erb.result(context.get_binding)
+end
+
+def ensure_file_header(file_path, header_template, sep_template)
+  return if File.exist?(file_path) && File.size?(file_path)
+  File.open(file_path, 'a:utf-8') do |f|
+    f.write render_template(header_template, {})
+    f.write render_template(sep_template, {})
+  end
+end
+
+def extract_last_date_in_file(path)
+  return nil unless File.exist?(path)
+  last_date = nil
+  re = /##\s*🗓️\s*(\d{4}-\d{2}-\d{2})/
+  File.foreach(path, encoding: 'utf-8') do |line|
+    next unless (m = line.match(re))
+    begin
+      d = Date.parse(m[1])
+      last_date = d if last_date.nil? || d > last_date
+    rescue ArgumentError
+    end
+  end
+  last_date
+end
+
+def iso_week_range_for(date_like)
+  date = to_date(date_like)
+  monday = date - (date.cwday - 1)
+  sunday = monday + 6
+  [monday, sunday]
+end
+
+def append(content, path)
+  File.open(path, 'a:utf-8') { |f| f.write(content) }
+end
+
+def load_config(config_path)
+  return {} unless File.exist?(config_path)
+  YAML.safe_load(File.read(config_path)) || {}
+rescue
+  {}
+end
+
+def list_sets(templates_dir)
+  Dir.children(templates_dir)
+     .select { |n| File.directory?(File.join(templates_dir, n)) && n != 'shared' }
+     .sort
+end
+
+class JournalGen < Clamp::Command
+  option ['-f', '--file'], 'FILE', 'Markdown journal file to create or extend'
+  option ['-o', '--output-dir'], 'DIR', 'Directory for new journal file (used only if --file is not given)'
+  option ['-w', '--weeks'], 'N', 'Number of weeks to generate (default: 4)', default: '4' do |s|
+    i = Integer(s); raise ArgumentError, 'weeks must be >= 1' if i < 1; i
+  end
+  option ['-t', '--template-dir'], 'DIR', 'Directory with ERB templates (default: ./templates)'
+  option ['-s', '--set'], 'NAME', 'Question set (folder in templates/, default from config or "personal")'
+  option ['--skip-weekly'], :flag, 'Skip weekly summary blocks'
+  option ['--skip-monthly'], :flag, 'Skip 4-week “monthly” summary blocks'
+  option ['--start-next-monday'], :flag, 'Start generation on the next Monday (instead of the day after last entry)'
+  option ['--dry-run'], :flag, 'Print planned dates, do not write'
+  option ['--list-sets'], :flag, 'List available sets and exit'
+
+  def execute
+    tdir = template_dir || File.join(__dir__, 'templates')
+    config_path = File.join(__dir__, 'config.yml')
+    cfg = load_config(config_path)
+
+    if list_sets?
+      puts "Available sets in #{tdir}:"
+      puts list_sets(tdir).map { |n| "- #{n}" }
+      return
+    end
+
+    chosen_set = self.set || cfg['default_set'] || 'personal'
+    available = list_sets(tdir)
+    unless available.include?(chosen_set)
+      warn "Warning: set '#{chosen_set}' not found in #{tdir}. Available: #{available.join(', ')}"
+      chosen_set = 'personal'
+    end
+
+    header_template  = File.join(tdir, 'shared', 'header.md.erb')
+    sep_template     = File.join(tdir, 'shared', 'separator.md.erb')
+    day_template     = File.join(tdir, chosen_set, 'day.md.erb')
+    weekly_template  = File.join(tdir, chosen_set, 'weekly.md.erb')
+    monthly_template = File.join(tdir, chosen_set, 'monthly.md.erb')
+
+    [header_template, sep_template, day_template, weekly_template, monthly_template].each do |p|
+      abort "Missing template: #{p}" unless File.exist?(p)
+    end
+
+    if self.file && !self.file.strip.empty?
+      target = self.file
+    else
+      fname = "journal-#{Date.today}.md"
+      if output_dir && !output_dir.strip.empty?
+        FileUtils.mkdir_p(output_dir)
+        target = File.join(output_dir, fname)
+      else
+        target = fname
+      end
+    end
+
+    ensure_file_header(target, header_template, sep_template)
+
+    last = extract_last_date_in_file(target)
+    base_start = last ? (last + 1) : Date.today
+    base_start = to_date(base_start)
+    start_date = start_next_monday? ? (base_start + ((8 - base_start.cwday) % 7)) : base_start
+    start_date = to_date(start_date)
+
+    total_days = Integer(weeks) * 7
+    end_date   = start_date + (total_days - 1)
+
+    if dry_run?
+      puts "Would write to: #{target}"
+      puts "Set: #{chosen_set} (templates from #{tdir})"
+      puts "Range: #{start_date} .. #{end_date} (#{weeks} week#{weeks == 1 ? '' : 's'})"
+      puts "Weekly summaries: #{skip_weekly? ? 'skipped' : 'included after ISO Sunday'}"
+      puts "Monthly summaries: #{skip_monthly? ? 'skipped' : 'included'}"
+      return
+    end
+
+    current = start_date
+    days_written = 0
+
+    while current <= end_date
+      append(render_template(day_template, { date: current, weekday: WEEKDAY[current.wday] }), target)
+      append(render_template(sep_template, {}), target)
+
+      if !skip_weekly? && current.wday == 0
+        monday, sunday = iso_week_range_for(current)
+        append(render_template(weekly_template, { kw: current.cweek, cwy: current.cwyear, monday: monday, sunday: sunday }), target)
+        append(render_template(sep_template, {}), target)
+      end
+
+      current = to_date(current) + 1
+      days_written += 1
+
+      if !skip_monthly? && (days_written % 28 == 0)
+        block_start = to_date(current) - 28
+        block_end   = to_date(current) - 1
+        append(render_template(monthly_template, { start_date: block_start, end_date: block_end }), target)
+        append(render_template(sep_template, {}), target)
+      end
+    end
+
+    puts "Updated: #{target}"
+    puts "Set: #{chosen_set}"
+    puts "Added days: #{start_date} .. #{end_date}"
+    puts "Weekly summaries: #{skip_weekly? ? 'skipped' : 'included after ISO Sunday'}"
+    puts "Monthly summaries: #{skip_monthly? ? 'skipped' : 'included'}"
+  end
+end
+
+JournalGen.run
