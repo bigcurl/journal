@@ -124,8 +124,3 @@ You can create your own sets by adding a new folder inside `templates/`
 - **chore:** dependency bumps, maintenance  
 - **refactor:** code changes without new features  
 
----
-
-## License
-
-MIT
