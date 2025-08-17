@@ -19,7 +19,7 @@ default_set: personal
 ```bash
 bundle install
 ruby journal_gen.rb
+ruby journal_gen.rb --list-sets
 ruby journal_gen.rb --set work
 ruby journal_gen.rb --set family
-ruby journal_gen.rb --list-sets
 ```
