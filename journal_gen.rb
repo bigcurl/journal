@@ -97,7 +97,7 @@ end
 class JournalGen < Clamp::Command
   option ['-f', '--file'], 'FILE', 'Markdown journal file to create or extend'
   option ['-o', '--output-dir'], 'DIR', 'Directory for new journal file (used only if --file is not given)'
-  option ['-w', '--weeks'], 'N', 'Number of weeks to generate (default: 4)', default: '4' do |s|
+  option ['-w', '--weeks'], 'N', 'Number of weeks to generate (default: 4)', default: 4 do |s|
     i = Integer(s)
     raise ArgumentError, 'weeks must be >= 1' if i < 1
 
