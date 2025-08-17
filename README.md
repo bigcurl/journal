@@ -111,8 +111,18 @@ Shared templates:
 - `shared/header.md.erb` – file header  
 - `shared/separator.md.erb` – divider between entries  
 
-You can create your own sets by adding a new folder inside `templates/`  
+You can create your own sets by adding a new folder inside `templates/`
 (e.g. `templates/fitness/`) with the same three ERB files.
+
+---
+
+## Tests
+
+Run the test suite with Bundler to ensure dependencies like `clamp` are available:
+
+```bash
+bundle exec ruby -I test test/journal_gen_options_test.rb
+```
 
 ---
 
