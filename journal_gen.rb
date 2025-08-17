@@ -7,6 +7,7 @@ require 'erb'
 require 'yaml'
 require 'clamp'
 require 'fileutils'
+require 'open3'
 
 WEEKDAY = %w[Sunday Monday Tuesday Wednesday Thursday Friday Saturday].freeze
 
@@ -73,6 +74,22 @@ def list_sets(templates_dir)
      .sort
 end
 
+def which(cmd)
+  exts = ENV['PATHEXT'] ? ENV['PATHEXT'].split(';') : ['']
+  ENV['PATH'].split(File::PATH_SEPARATOR).each do |path|
+    exts.each do |ext|
+      exe = File.join(path, "#{cmd}#{ext}")
+      return exe if File.executable?(exe) && !File.directory?(exe)
+    end
+  end
+  nil
+end
+
+def run!(argv, chdir: nil)
+  stdout, stderr, status = Open3.capture3(*argv, chdir: chdir)
+  [status.success?, stdout, stderr, status.exitstatus]
+end
+
 class JournalGen < Clamp::Command
   option ['-f', '--file'], 'FILE', 'Markdown journal file to create or extend'
   option ['-o', '--output-dir'], 'DIR', 'Directory for new journal file (used only if --file is not given)'
@@ -86,6 +103,10 @@ class JournalGen < Clamp::Command
   option ['--start-next-monday'], :flag, 'Start generation on the next Monday (instead of the day after last entry)'
   option ['--dry-run'], :flag, 'Print planned dates, do not write'
   option ['--list-sets'], :flag, 'List available sets and exit'
+
+  option ['--format'], 'FORMAT', 'Output format: md or pdf (default: md)', default: 'md'
+  option ['--delete-md'], :flag, 'When --format pdf is used, delete the intermediate .md file (default: keep)'
+  option ['--pandoc'], 'PATH', 'Path to pandoc executable (default: search PATH)'
 
   def execute
     tdir = template_dir || File.join(__dir__, 'templates')
@@ -110,40 +131,41 @@ class JournalGen < Clamp::Command
     day_template     = File.join(tdir, chosen_set, 'day.md.erb')
     weekly_template  = File.join(tdir, chosen_set, 'weekly.md.erb')
     monthly_template = File.join(tdir, chosen_set, 'monthly.md.erb')
+    [header_template, sep_template, day_template, weekly_template, monthly_template].each { |p| abort "Missing template: #{p}" unless File.exist?(p) }
 
-    [header_template, sep_template, day_template, weekly_template, monthly_template].each do |p|
-      abort "Missing template: #{p}" unless File.exist?(p)
-    end
-
-    if self.file && !self.file.strip.empty?
-      target = self.file
-    else
-      fname = "journal-#{Date.today}.md"
-      if output_dir && !output_dir.strip.empty?
-        FileUtils.mkdir_p(output_dir)
-        target = File.join(output_dir, fname)
+    md_target =
+      if self.file && !self.file.strip.empty?
+        self.file
       else
-        target = fname
+        fname = "journal-#{Date.today}.md"
+        if output_dir && !output_dir.strip.empty?
+          FileUtils.mkdir_p(output_dir)
+          File.join(output_dir, fname)
+        else
+          fname
+        end
       end
+
+    if File.extname(md_target).downcase == '.pdf'
+      md_target = md_target.sub(/\.pdf\z/i, '.md')
     end
 
-    ensure_file_header(target, header_template, sep_template)
+    ensure_file_header(md_target, header_template, sep_template)
 
-    last = extract_last_date_in_file(target)
-    base_start = last ? (last + 1) : Date.today
-    base_start = to_date(base_start)
+    last = extract_last_date_in_file(md_target)
+    base_start = to_date(last ? (last + 1) : Date.today)
     start_date = start_next_monday? ? (base_start + ((8 - base_start.cwday) % 7)) : base_start
     start_date = to_date(start_date)
-
     total_days = Integer(weeks) * 7
     end_date   = start_date + (total_days - 1)
 
     if dry_run?
-      puts "Would write to: #{target}"
+      puts "Would write to: #{md_target}"
       puts "Set: #{chosen_set} (templates from #{tdir})"
       puts "Range: #{start_date} .. #{end_date} (#{weeks} week#{weeks == 1 ? '' : 's'})"
       puts "Weekly summaries: #{skip_weekly? ? 'skipped' : 'included after ISO Sunday'}"
       puts "Monthly summaries: #{skip_monthly? ? 'skipped' : 'included'}"
+      puts "Format: #{format}"
       return
     end
 
@@ -151,13 +173,13 @@ class JournalGen < Clamp::Command
     days_written = 0
 
     while current <= end_date
-      append(render_template(day_template, { date: current, weekday: WEEKDAY[current.wday] }), target)
-      append(render_template(sep_template, {}), target)
+      append(render_template(day_template, { date: current, weekday: WEEKDAY[current.wday] }), md_target)
+      append(render_template(sep_template, {}), md_target)
 
       if !skip_weekly? && current.wday == 0
         monday, sunday = iso_week_range_for(current)
-        append(render_template(weekly_template, { kw: current.cweek, cwy: current.cwyear, monday: monday, sunday: sunday }), target)
-        append(render_template(sep_template, {}), target)
+        append(render_template(weekly_template, { kw: current.cweek, cwy: current.cwyear, monday: monday, sunday: sunday }), md_target)
+        append(render_template(sep_template, {}), md_target)
       end
 
       current = to_date(current) + 1
@@ -166,12 +188,29 @@ class JournalGen < Clamp::Command
       if !skip_monthly? && (days_written % 28 == 0)
         block_start = to_date(current) - 28
         block_end   = to_date(current) - 1
-        append(render_template(monthly_template, { start_date: block_start, end_date: block_end }), target)
-        append(render_template(sep_template, {}), target)
+        append(render_template(monthly_template, { start_date: block_start, end_date: block_end }), md_target)
+        append(render_template(sep_template, {}), md_target)
       end
     end
 
-    puts "Updated: #{target}"
+    if format.downcase == 'pdf'
+      pdf_target = md_target.sub(/\.md\z/i, '.pdf')
+      pandoc_bin = self.pandoc && !self.pandoc.strip.empty? ? self.pandoc : which('pandoc')
+      abort "Error: pandoc not found. Install pandoc or pass --pandoc /path/to/pandoc." unless pandoc_bin
+
+      ok, _out, err, code = run!([pandoc_bin, md_target, '-o', pdf_target])
+      abort "pandoc failed (exit #{code}).\n#{err}" unless ok
+
+      if delete_md?
+        FileUtils.rm_f(md_target)
+        puts "PDF written: #{pdf_target} (deleted markdown)"
+      else
+        puts "PDF written: #{pdf_target} (markdown kept: #{md_target})"
+      end
+    else
+      puts "Markdown written: #{md_target}"
+    end
+
     puts "Set: #{chosen_set}"
     puts "Added days: #{start_date} .. #{end_date}"
     puts "Weekly summaries: #{skip_weekly? ? 'skipped' : 'included after ISO Sunday'}"
