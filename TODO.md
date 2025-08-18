@@ -20,6 +20,7 @@ for the journal script.
 ---
 
 ## 🧪 Tests
+- [ ] Build rake task to execute all tests  
 - [ ] Create minitest for file creation with headers  
 - [ ] Ensure template variables resolve correctly  
 
