@@ -29,6 +29,7 @@ Available sets are located in `templates/`:
 - `personal/`
 - `work/`
 - `family/`
+- `sport/`
 - `shared/` (header and separator templates)
 
 ---
