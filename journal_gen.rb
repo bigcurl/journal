@@ -78,22 +78,6 @@ def list_sets(templates_dir)
      .sort
 end
 
-def which(cmd)
-  exts = ENV['PATHEXT'] ? ENV['PATHEXT'].split(';') : ['']
-  ENV['PATH'].split(File::PATH_SEPARATOR).each do |path|
-    exts.each do |ext|
-      exe = File.join(path, "#{cmd}#{ext}")
-      return exe if File.executable?(exe) && !File.directory?(exe)
-    end
-  end
-  nil
-end
-
-def run!(argv, chdir: nil)
-  stdout, stderr, status = Open3.capture3(*argv, chdir: chdir)
-  [status.success?, stdout, stderr, status.exitstatus]
-end
-
 class JournalGen < Clamp::Command
   option ['-f', '--file'], 'FILE', 'Markdown journal file to create or extend'
   option ['-o', '--output-dir'], 'DIR', 'Directory for new journal file (used only if --file is not given)'
@@ -111,19 +95,10 @@ class JournalGen < Clamp::Command
   option ['--dry-run'], :flag, 'Print planned dates, do not write'
   option ['--list-sets'], :flag, 'List available sets and exit'
 
-  option ['--export', '--format'], 'FORMAT', 'Output format: md or pdf (default: md)', default: 'md',
-                                                                                       attribute_name: :format
-  option ['--delete-md'], :flag, 'When --export pdf is used, delete the intermediate .md file (default: keep)'
-  option ['--pandoc'], 'PATH', 'Path to pandoc executable (default: search PATH)'
-
   def execute
     tdir = template_dir || File.join(__dir__, 'templates')
     config_path = File.join(__dir__, 'config.yml')
     cfg = load_config(config_path)
-
-    if format.downcase == 'pdf' && (file.nil? || file.strip.empty?)
-      abort 'Error: --file is required when using --export pdf'
-    end
 
     if list_sets?
       puts "Available sets in #{tdir}:"
@@ -160,8 +135,6 @@ class JournalGen < Clamp::Command
         end
       end
 
-    md_target = md_target.sub(/\.pdf\z/i, '.md') if File.extname(md_target).downcase == '.pdf'
-
     ensure_file_header(md_target, header_template, sep_template)
 
     last = extract_last_date_in_file(md_target)
@@ -177,7 +150,6 @@ class JournalGen < Clamp::Command
       puts "Range: #{start_date} .. #{end_date} (#{weeks} week#{weeks == 1 ? '' : 's'})"
       puts "Weekly summaries: #{skip_weekly? ? 'skipped' : 'included after ISO Sunday'}"
       puts "Monthly summaries: #{skip_monthly? ? 'skipped' : 'included'}"
-      puts "Format: #{format}"
       return
     end
 
@@ -208,24 +180,7 @@ class JournalGen < Clamp::Command
       append(render_template(sep_template, {}), md_target)
     end
 
-    if format.downcase == 'pdf'
-      pdf_target = md_target.sub(/\.md\z/i, '.pdf')
-      pandoc_bin = pandoc && !pandoc.strip.empty? ? pandoc : which('pandoc')
-      abort 'Error: pandoc not found. Install pandoc or pass --pandoc /path/to/pandoc.' unless pandoc_bin
-
-      ok, _out, err, code = run!([pandoc_bin, md_target, '-o', pdf_target])
-      abort "pandoc failed (exit #{code}).\n#{err}" unless ok
-
-      if delete_md?
-        FileUtils.rm_f(md_target)
-        puts "PDF written: #{pdf_target} (deleted markdown)"
-      else
-        puts "PDF written: #{pdf_target} (markdown kept: #{md_target})"
-      end
-    else
-      puts "Markdown written: #{md_target}"
-    end
-
+    puts "Markdown written: #{md_target}"
     puts "Set: #{chosen_set}"
     puts "Added days: #{start_date} .. #{end_date}"
     puts "Weekly summaries: #{skip_weekly? ? 'skipped' : 'included after ISO Sunday'}"

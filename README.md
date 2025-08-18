@@ -14,8 +14,6 @@ Clone the repository and install dependencies:
 bundle install
 ```
 
-> To export PDF, install **pandoc** (`brew install pandoc`, `apt-get install pandoc`, or download for Windows).
-
 ---
 
 ## Configuration
@@ -56,9 +54,6 @@ ruby journal_gen.rb
     --start-next-monday   Start generation on the next Monday (instead of the day after last entry)
     --dry-run             Print planned dates, do not write
     --list-sets           List available sets and exit
-    --export FORMAT       Output format: md or pdf (default: md; requires --file for pdf)
-    --delete-md           Delete the intermediate .md when --export pdf (default: keep)
-    --pandoc PATH         Path to pandoc executable (defaults to first found in PATH)
 -h, --help                Print help
 ```
 
@@ -78,15 +73,6 @@ ruby journal_gen.rb --set family --output-dir ~/Documents/Journals
 
 # Generate 8 weeks starting next Monday, skipping monthly summaries
 ruby journal_gen.rb --weeks 8 --start-next-monday --skip-monthly
-
-# Export to PDF (requires pandoc), keep the markdown (default)
-ruby journal_gen.rb --file journal.md --export pdf
-
-# Export to PDF and delete the markdown
-ruby journal_gen.rb --file journal.md --export pdf --delete-md
-
-# Use a specific pandoc path
-ruby journal_gen.rb --file journal.md --export pdf --pandoc /usr/local/bin/pandoc
 
 # Just see what would be generated
 ruby journal_gen.rb --dry-run
@@ -133,4 +119,3 @@ bundle exec ruby -I test test/journal_gen_options_test.rb
 - **docs:** documentation updates  
 - **chore:** dependency bumps, maintenance  
 - **refactor:** code changes without new features  
-
