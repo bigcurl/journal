@@ -6,20 +6,16 @@ for the journal script.
 ---
 
 ## 🚀 New Features
-- [ ] Add option to export directly to PDF  
-- [ ] Implement customizable question sets per user  
-- [ ] Add support for recurring reminders  
+- [ ] Add option to export directly to PDF
 
 ---
 
 ## 🛠 Improvements
-- [ ] Refactor template rendering for clarity  
-- [ ] Improve error handling with helpful messages  
 - [ ] Add colorized CLI output for better UX  
-- [ ] Set name should be applied to journal name
-- [ ] Journal name date should be year
+- [ ] Journal name date should be year only
+- [ ] Set name should be part of the journal name
 - [ ] Journals should be created in a new folder journals, that is ignored by git
-- [ ] Yearly summary template
+- [ ] Yearly summary template missing
 
 ---
 
