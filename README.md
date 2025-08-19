@@ -30,6 +30,7 @@ Available sets are located in `templates/`:
 - `work/`
 - `family/`
 - `sport/`
+- `diet/` — questions to track meals, calories, hydration, and well‑being
 - `shared/` (header and separator templates)
 
 ---
