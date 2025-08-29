@@ -14,6 +14,12 @@ Clone the repository and install dependencies:
 bundle install
 ```
 
+You can run the CLI with your system Ruby, but using Bundler ensures the right gems are loaded:
+
+```bash
+bundle exec ruby journal_gen.rb --help
+```
+
 ---
 
 ## Configuration
@@ -30,20 +36,20 @@ Available sets are located in `templates/`:
 - `work/`
 - `family/`
 - `sport/`
-- `diet/` — questions to track meals, calories, hydration, and well‑being
+- `diet/` — questions to track meals, calories, hydration, and well-being
 - `shared/` (header and separator templates)
 
 ---
 
 ## Usage
 
-Generate a journal file:
+Generate a journal file (uses defaults from `config.yml` when present):
 
 ```bash
-ruby journal_gen.rb
+bundle exec ruby journal_gen.rb
 ```
 
-### Options
+### Command reference
 
 ```
 -f, --file FILE           Markdown journal file to create or extend
@@ -59,28 +65,43 @@ ruby journal_gen.rb
 -h, --help                Print help
 ```
 
+Notes:
+
+- If `--file` is omitted, a new file named `journal-YYYY-MM-DD.md` is created.
+- If `--output-dir` is provided without `--file`, the new file is placed there.
+- `--template-dir` can point to a custom templates folder if you add your own set.
+
 ---
 
 ## Examples
 
 ```bash
 # Use default set (from config.yml)
-ruby journal_gen.rb
+bundle exec ruby journal_gen.rb
 
 # Create a work journal
-ruby journal_gen.rb --set work
+bundle exec ruby journal_gen.rb --set work
 
 # Create a family journal in a specific directory
-ruby journal_gen.rb --set family --output-dir ~/Documents/Journals
+bundle exec ruby journal_gen.rb --set family --output-dir ~/Documents/Journals
 
 # Generate 8 weeks starting next Monday, skipping monthly summaries
-ruby journal_gen.rb --weeks 8 --start-next-monday --skip-monthly
+bundle exec ruby journal_gen.rb --weeks 8 --start-next-monday --skip-monthly
 
 # Just see what would be generated
-ruby journal_gen.rb --dry-run
+bundle exec ruby journal_gen.rb --dry-run
 
 # List available sets
-ruby journal_gen.rb --list-sets
+bundle exec ruby journal_gen.rb --list-sets
+
+# Diet tracking examples
+# ----------------------
+# Start a new diet journal in ./journals
+bundle exec ruby journal_gen.rb --set diet --output-dir ./journals
+
+# Append 2 more weeks to an existing file
+bundle exec ruby journal_gen.rb --set diet --weeks 2 \
+  --file ./journals/journal-2025-01-01.md
 ```
 
 ---
@@ -102,6 +123,24 @@ Shared templates:
 You can create your own sets by adding a new folder inside `templates/`
 (e.g. `templates/fitness/`) with the same three ERB files.
 
+Tip for custom sets: the tool tries to auto-resume by detecting the last generated
+day in the file. It looks for lines that include a day heading with a date. If you
+create custom day templates, ensure the date appears in the heading so auto-resume
+keeps working.
+
+---
+
+## How dates are chosen
+
+- Start date: by default, the day after the last generated day in the file; if the
+  file does not yet contain entries, today. Use `--start-next-monday` to align to
+  the next ISO Monday instead.
+- End date: `--weeks N` generates `N * 7` days starting from the start date.
+- Weekly summaries: inserted after each ISO Sunday (end of week), unless `--skip-weekly`.
+- 4-week summaries: inserted every 28 days of generated content, unless `--skip-monthly`.
+
+Use `--dry-run` to print the plan (dates, set, and target file) without writing anything.
+
 ---
 
 ## Tests
@@ -111,6 +150,15 @@ Run the test suite with Bundler to ensure dependencies like `clamp` are availabl
 ```bash
 bundle exec ruby -I test test/journal_gen_options_test.rb
 ```
+
+---
+
+## Troubleshooting
+
+- clamp not found: run `bundle install`, then use `bundle exec ruby journal_gen.rb`.
+- No templates found: pass an explicit `--template-dir /absolute/path/to/templates`.
+- Didn’t resume where expected: ensure your daily headings include a date, or pass
+  `--file` to target the correct document and `--start-next-monday` to realign.
 
 ---
 
